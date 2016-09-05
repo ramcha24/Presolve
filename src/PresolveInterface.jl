@@ -4,9 +4,10 @@ export Presolver
 
 immutable Presolver <: AbstractMathProgSolver
     realsolver :: AbstractMathProgSolver
+    function Presolver(;realsolver = AbstractMathProgSolver())
+        new(realsolver)
+    end
 end
-
-Presolver(;kwargs...) = Presolver(kwargs)
 
 
 type PresolveMathProgModel <: AbstractMathProgModel
@@ -16,30 +17,34 @@ type PresolveMathProgModel <: AbstractMathProgModel
     A::SparseMatrixCSC{Float64,Int}
     b::Vector{Float64}
     c::Vector{Float64}
-    p::Presolve_Problem
-    #realsolver::AbstractMathProgSolver
+    #p::Presolve_Problem
     orig_sense::Symbol
-    solve_stat::Symbol
+    solve_stat::Float64
     obj_val::Float64
-    primal_sol::Float64
-    realsolver :: AbstractMath
+    primal_sol::Array{Float64,1}
+    realsolver::AbstractMathProgSolver
+    function PresolveMathProgModel(;realsolver=AbstractMathProgSolver())
+        new(0,0,spzeros(0,0),Int[],Int[],:Min,:0,0.0,Int[],realsolver)
+    end
 end
 
 # I have to neccesitate one keyword argument no arguemnt implies I take the default solver.
 
-PresolveMathProgModel(;kwargs...) = PresolveMathProgModel(0,0,spzeros(0,0),Int[],Int[],Presolve_Problem(false,0,0),
-:Min,:0,0.0,Int[],kwargs)
+#PresolveMathProgModel(;kwargs...) = PresolveMathProgModel(0,0,spzeros(0,0),Int[],Int[],:Min,:0,0.0,Int[],kwargs)
 
-PresolveMathProgModel() = PresolveMathProgModel(0,0,spzeros(0,0),Int[],Int[],Presolve_Problem(false,0,0),
-:Min,:0,0.0,Int[],AbstractMathProgSolver())
+#PresolveMathProgModel() = PresolveMathProgModel(0,0,spzeros(0,0),Int[],Int[],Presolve_Problem(false,0,0),:Min,:0,0.0,Int[],AbstractMathProgSolver())
 
 # i have to resolve how I take in the options to the real solver.
 
-ConicModel(s::Presolver) = PresolveMathProgModel(;s.options...)
+#ConicModel(s::Presolver) = PresolveMathProgModel(;realsolver = s.realsolver)
+function ConicModel(s::Presolver)
+    return PresolveMathProgModel(;realsolver = s.realsolver)
+end
 LinearQuadraticModel(s::Presolver) = ConicToLPQPBridge(ConicModel(s))
 
 function optimize!(m::PresolveMathProgModel)
-    solution = options.
+    #TODO..
+    solution = []
 
     m.presolve_sol = solution
 end

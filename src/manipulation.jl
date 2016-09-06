@@ -300,10 +300,13 @@ make_new            : Converts the final presolve problem data into the format o
 `
 
 # The function make_presolve! "makes" the links between the necessary row or col or matrix elements
-# TODO: include rowlb and rowub support. 
-function make_presolve!(verbose::Bool, p::Presolve_Problem,c::Array{Float64,1}, A::SparseMatrixCSC{Float64,Int64}, b::Array{Float64,1}, lb::Array{Float64,1}, ub::Array{Float64,1})
+# TODO: include rowlb and rowub support.
+function make_presolve!(verbose::Bool, p::Presolve_Problem, A::SparseMatrixCSC{Float64,Int64}, collb::Array{Float64,1},colub::Array{Float64,1}, c::Array{Float64,1}, rowlb::Array{Float64,1},rowub::Array{Float64,1})
     v = verbose
     m,n = size(A)
+
+    # TODO.. make changes everywhere with collb,colub and rowlb,rowub
+
     # checks to ensure input problem is valid.
     p.originalm != m && error("Wrong size of b wrt A")
     p.originaln != n && error("Wrong size of c wrt A")
@@ -483,5 +486,5 @@ function make_new(verbose::Bool, p::Presolve_Problem)
         end
     end
     newA = sparse(I,J,Val,currentm,currentn)
-    return newc,newA,newb,newlb,newub
+    return newA,newcollb,newcolub,newc,newrowlb,newrowub
 end

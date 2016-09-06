@@ -8,12 +8,8 @@ singleton_row!      : Processes the singleton row. Deletes the row and makes cha
 other functions will be added here in the future.
 `
 
-function presolver!(verbose::Bool,c::Array{Float64,1}, A::SparseMatrixCSC{Float64,Int64}, b::Array{Float64,1}, lb::Array{Float64,1}, ub::Array{Float64,1})
+function presolver!(verbose::Bool,p::Presolve_Problem,c::Array{Float64,1}, A::SparseMatrixCSC{Float64,Int64}, b::Array{Float64,1}, lb::Array{Float64,1}, ub::Array{Float64,1})
     v = verbose
-    v && println("Making the Presolve Problem")
-    p = Presolve_Problem(v,length(b),length(c))
-    make_presolve!(v,p,c,A,b,lb,ub)
-
     v && println("PRESOLVE ROUTINES...............................")
     row = Presolve_Row()
     col = Presolve_Col()
@@ -52,8 +48,8 @@ function presolver!(verbose::Bool,c::Array{Float64,1}, A::SparseMatrixCSC{Float6
     end
 
     v && println("Making the reduced Problem")
-    c,A,b,lb,ub = make_new(v,p)
-    return c,A,b,lb,ub,p.independentvar,p.pstack
+    A,collb,colub,c,rowlb,rowub = make_new(v,p)
+    return A,collb,colub,c,rowlb,rowub
 end
 
 function empty_row!(verbose::Bool, p::Presolve_Problem, row::Presolve_Row)

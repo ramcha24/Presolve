@@ -228,4 +228,7 @@ type Presolve_Problem
 
         new(originalm,originaln,dictrow,dictcol,dictaij,rowptr,colptr,rowque,colque,independentvar,activeconstr,rowcounter,colcounter,pstack,finalrows,finalcols)
     end
+    function Presolve_Problem()
+        return Presolve_Problem(false,0,0)
+    end
 end

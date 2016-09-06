@@ -1,13 +1,11 @@
 # Routines and Algorithms that are needed for Presolving.
 
-`
+"
 --- Presolver Core ---
 empty_row!          : Processes the empty row. Removes it or reports an Infeasibility
 presolver!          : Traverses the active list of rows and detects if redundancies are found. Call approporiate functions to handle redundancies.
 singleton_row!      : Processes the singleton row. Deletes the row and makes changes to the constraint matrix appropriately
-other functions will be added here in the future.
-`
-
+other functions will be added here in the future."
 function presolver!(verbose::Bool,p::Presolve_Problem,c::Array{Float64,1}, A::SparseMatrixCSC{Float64,Int64}, b::Array{Float64,1}, lb::Array{Float64,1}, ub::Array{Float64,1})
     v = verbose
     v && println("PRESOLVE ROUTINES...............................")

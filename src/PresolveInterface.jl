@@ -48,9 +48,9 @@ end
 
 LinearQuadraticModel(s::Presolver) = ConicToLPQPBridge(ConicModel(s))
 
-status(m::PresolveMathProgModel) = m.solve_stat
-getobjval(m::PresolveMathProgModel) = m.obj_val
-getsolution(m::PresolveMathProgModel) = copy(m.primal_sol)
+status(model::PresolveMathProgModel) = model.solve_stat
+getobjval(model::PresolveMathProgModel) = model.obj_val
+getsolution(model::PresolveMathProgModel) = copy(model.primal_sol)
 numvar(model::PresolveMathProgModel) = model.m  # my m doesn't change. in future it might.
 numconstr(model::PresolveMathProgModel) = model.n
 supportedcones(s::Presolver) = [:Free, :Zero, :NonNeg, :NonPos]

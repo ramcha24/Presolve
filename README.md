@@ -1,4 +1,4 @@
-# Presolver
+# Presolve
 Presolve Routines for Optimization Problems
 
 Presolver(s::AbtractMathProgBaseSolver) returns a conic solver.

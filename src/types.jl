@@ -41,7 +41,9 @@ abstract Presolve_Element
 type Presolve_Row <: Presolve_Element
     # Each row represents a constraint row i
     i :: Int                                # Row number in the original problem.
-    b_val :: Float64                        # b[i] in the original problem.
+    lb :: Float64                        # row[i] lower bound in the original problem.
+    ub :: Float64                        # row[i] upper bound in the original problem.
+    b_val :: Union{Float64,Nothing}                        # b[i] in the original problem.
     aij :: Union{Presolve_Element,Nothing}  # Reference to the first non-zero matrix entry in row i. aij = nothing indicates empty row.
     prev :: Presolve_Row                    # Reference to previous row in the original problem. Row 5 holds ref to Row 4 etc
     next :: Presolve_Row                    # Reference to next row in the original problem. Row 5 holds ref to Row 6 etc
@@ -52,6 +54,8 @@ type Presolve_Row <: Presolve_Element
         # Constructor that creates a default row which has an invalid row.i value.
         n = new()
         n.i = -1
+        n.rowlb = 0.0
+        n.rowub = 0.0
         n.b_val = 0.0
         n.is_active = true
         n.aij = nothing
@@ -61,14 +65,14 @@ type Presolve_Row <: Presolve_Element
         n.active_next = n
         n
     end
-end
 
+end
 type Presolve_Col <: Presolve_Element
     # Each column represents a variable xj
     j :: Int                                # Col number in the original problem.
+    l :: Float64                           # lb[j] in the original problem
+    u :: Float64                           # ub[j] in the original problem
     c_val :: Float64                        # c[j] in the original problem.
-    lb :: Float64                           # lb[j] in the original problem
-    ub :: Float64                           # ub[j] in the original problem
     aij :: Union{Presolve_Element,Nothing}  # Reference to the first non-zero matrix entry in col j. aij = nothing indicates empty col.
     prev :: Presolve_Col                    # Reference to previous Col in the original problem. Col 5 holds ref to Col 4 etc
     next :: Presolve_Col                    # Reference to next Col in the original problem. Col 5 holds ref to Col 6 etc
@@ -79,6 +83,8 @@ type Presolve_Col <: Presolve_Element
         # Constructor that creates a default row which has an invalid row.i value.
         n = new()
         n.j = -1
+        n.l = -Inf
+        n.u = +Inf
         n.c_val = 0.0
         n.is_independent = true
         n.aij = nothing

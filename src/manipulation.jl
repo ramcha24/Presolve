@@ -10,13 +10,19 @@ Initially, the aij pointers are assigned "nothing". They are updated later by th
 `
 
 # Creates row i with b[i] value b_val and adds it to Presolve_Problem p.
-function add_row!(verbose::Bool, p::Presolve_Problem, i::Int, b_val::Float64)
+function add_row!(verbose::Bool, p::Presolve_Problem, i::Int, lb::Float64, ub::Float64)
     v = verbose
     v && println("Adding row : $(i)")
 
     row = Presolve_Row()
     row.i = i
-    row.b_val = b_val
+    row.lb = lb
+    row.ub = ub
+    if(lb == ub)
+        row.b_val = lb
+    else
+        row.b_val = nothing
+    end
     row.aij = nothing
     row.is_active = false
     if(i!=1)
@@ -68,15 +74,15 @@ function deque_row!(verbose::Bool, p::Presolve_Problem, row::Presolve_Row)
 end
 
 # Creates col j with c[i] value c_val and adds it to Presolve_Problem p.
-function add_col!(verbose::Bool, p::Presolve_Problem, j::Int, c_val::Float64, lb::Float64, ub::Float64)
+function add_col!(verbose::Bool, p::Presolve_Problem, j::Int, c_val::Float64, l::Float64, u::Float64)
     v = verbose
     v && println("Adding col : $(j)")
 
     col = Presolve_Col()
     col.j = j
     col.c_val = c_val
-    col.lb = lb
-    col.ub = ub
+    col.l = l
+    col.u = u
     col.aij = nothing
     col.is_independent = false
     if(j!=1)
@@ -309,18 +315,20 @@ function make_presolve!(verbose::Bool, p::Presolve_Problem, A::SparseMatrixCSC{F
 
     # checks to ensure input problem is valid.
     p.originalm != m && error("Wrong size of b wrt A")
+    p.originalm != length(rowlb) && error("Wrong size of rowlb wrt A")
+    p.originalm != length(rowub) && error("Wrong size of rowub wrt A")
     p.originaln != n && error("Wrong size of c wrt A")
-    p.originaln != length(lb) && error("Wrong size of lb wrt A")
-    p.originaln != length(ub) && error("Wrong size of ub wrt A")
+    p.originaln != length(collb) && error("Wrong size of collb wrt A")
+    p.originaln != length(colub) && error("Wrong size of colub wrt A")
 
     v && println("Row SETUP ----- ")
     for i in 1:p.originalm
-        add_row!(v,p,i,b[i])
+        add_row!(v,p,i,rowlb[i],rowub[i])
     end
 
     v && println("COL SETUP -----")
     for j in 1:p.originaln
-        add_col!(v,p,j,c[j],lb[j],ub[j])
+        add_col!(v,p,j,c[j],collb[j],colub[j])
     end
 
     # Iterating through the non-zeros of sparse matrix A to construct the dictionary
@@ -361,6 +369,8 @@ function print_info(p::Presolve_Problem)
         println("-----------")
         row = p.dictrow[key]
         @show row.i
+        @show row.lb
+        @show row.ub
         @show row.b_val
         if(row.aij != nothing)
             @show row.aij.row.i
@@ -380,6 +390,8 @@ function print_info(p::Presolve_Problem)
         col = p.dictcol[key]
         @show col.j
         @show col.c_val
+        @show col.l
+        @show col.u
         if(col.aij != nothing)
             @show col.aij.row.i
             @show col.aij.col.j
@@ -413,8 +425,8 @@ function make_new(verbose::Bool, p::Presolve_Problem)
 
     currentn = 0
     newc = Array{Float64,1}()
-    newlb = Array{Float64,1}()
-    newub = Array{Float64,1}()
+    newcollb = Array{Float64,1}()
+    newcolub = Array{Float64,1}()
 
     col = p.colptr
     if(col.j != -1)
@@ -422,8 +434,8 @@ function make_new(verbose::Bool, p::Presolve_Problem)
         while(col != nothing)
             v && @show col.j
             push!(newc,col.c_val)
-            push!(newlb,col.lb)
-            push!(newub,col.ub)
+            push!(newlb,col.l)
+            push!(newub,col.u)
 
             currentn = currentn + 1
             p.finalcols[col.j] = currentn
@@ -438,12 +450,14 @@ function make_new(verbose::Bool, p::Presolve_Problem)
     v && @show currentn
 
     currentm = 0
-    newb = Array{Float64,1}()
+    newrowlb = Array{Float64,1}()
+    newrowub = Array{Float64,1}()
     row = p.rowptr
     if(row.i != -1)
         v && println("Constructing newb")
         while(row != nothing)
-            push!(newb,row.b_val)
+            push!(newrowlb,row.lb)
+            push!(newrowub,row.ub)
             currentm = currentm + 1
             p.finalrows[row.i] = currentm
             if(row.next == row)

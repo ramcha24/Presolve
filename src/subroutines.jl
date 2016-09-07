@@ -6,7 +6,7 @@ empty_row!          : Processes the empty row. Removes it or reports an Infeasib
 presolver!          : Traverses the active list of rows and detects if redundancies are found. Call approporiate functions to handle redundancies.
 singleton_row!      : Processes the singleton row. Deletes the row and makes changes to the constraint matrix appropriately
 other functions will be added here in the future."
-function presolver!(verbose::Bool,p::Presolve_Problem,c::Array{Float64,1}, A::SparseMatrixCSC{Float64,Int64}, b::Array{Float64,1}, lb::Array{Float64,1}, ub::Array{Float64,1})
+function presolver!(verbose::Bool, p::Presolve_Problem, A::SparseMatrixCSC{Float64,Int64}, collb::Array{Float64,1},colub::Array{Float64,1}, c::Array{Float64,1}, rowlb::Array{Float64,1},rowub::Array{Float64,1})
     v = verbose
     v && println("PRESOLVE ROUTINES...............................")
     row = Presolve_Row()
@@ -20,7 +20,12 @@ function presolver!(verbose::Bool,p::Presolve_Problem,c::Array{Float64,1}, A::Sp
             empty_row!(v,p,row)
         else
             if(row.aij.row_next == row.aij)
-                singleton_row!(v,p,row)
+                if(row.lb == row.ub)
+                    singleton_row1!(v,p,row)
+                else
+                    v && println("happy for now")
+                    #singleton_row2!(v,p,row)
+                end
             else
                 v && println("happy for now")
                 #forcing_constraints!(p,row,v)
@@ -64,7 +69,7 @@ function empty_row!(verbose::Bool, p::Presolve_Problem, row::Presolve_Row)
     v && println("Exiting Empty Row")
 end
 
-function singleton_row!(verbose::Bool, p::Presolve_Problem, row::Presolve_Row)
+function singleton_row1!(verbose::Bool, p::Presolve_Problem, row::Presolve_Row)
     v = verbose
     v && println("SINGETONE ROW FOUND AT $(row.i)")
 
@@ -93,4 +98,13 @@ function singleton_row!(verbose::Bool, p::Presolve_Problem, row::Presolve_Row)
         end
     end
     remove_col!(v,p,p.dictcol[j])
+end
+
+
+function singleton_row2!(verbose::Bool, p::Presolve_Problem, row::Presolve_Row)
+    # TODO..
+end
+
+function forcing_constraints!(verbose::Bool, p::Presolve_Problem, row::Presolve_Row)
+    # TODO ..
 end

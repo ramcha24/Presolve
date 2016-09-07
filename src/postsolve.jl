@@ -1,13 +1,12 @@
 
 using MathProgBase
 
-`
+"
 --- PostSolving Utilities ---
 add_to_stack!       : function that will add the Linear_Dependency element to the stack.
 post_solve!         : function that will post solve one Linear_Dependency element.
 return_postsolved   : function that will take in the solution from solver for reduced problem and returns solution for original problem
-`
-
+"
 function add_to_stack!(l::Linear_Dependency, independentvar::BitArray{1}, pstack::Array{Presolve_Stack,1})
     if (length(l.vec1) != length(l.vec2))
         error("vector1 size not equal to vector 2 size for LD element")
@@ -39,10 +38,9 @@ function return_postsolved(x::Array{Float64,1}, independentvar::BitArray{1}, pst
     return postsolvedX
 end
 
-`
+"
 --- Miscellaneous Utilities ---
-`
-
+"
 function is_zero(i::Float64)
     if(abs(i-0.0) <= 1e-3)
         return true

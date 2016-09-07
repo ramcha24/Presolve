@@ -1,5 +1,3 @@
-#workspace()
-
 module Presolve
 
 include("types.jl")

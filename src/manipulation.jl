@@ -1,13 +1,13 @@
 # This file contains operations that modify the presolve problem data
 
-`
+"
 --- Row and Column Operations ---
 There are four functions for each - add, enque, deque and remove.
 There are separate functions for enque and deque intentionally.
 There are times we want to remove a row from the active list but not remove it from the problem.
 Julia doesnt have NULL. Thus, self-referencing indicates end of the list in either direction.
-Initially, the aij pointers are assigned "nothing". They are updated later by the add_aij functions.
-`
+Initially, the aij pointers are assigned the value nothing. They are updated later by the add_aij functions.
+"
 
 # Creates row i with b[i] value b_val and adds it to Presolve_Problem p.
 function add_row!(verbose::Bool, p::Presolve_Problem, i::Int, lb::Float64, ub::Float64)
@@ -239,7 +239,7 @@ function remove_col!(verbose::Bool, p::Presolve_Problem, col::Presolve_Col)
     delete!(p.dictcol,col.j)
 end
 
-`
+"
 --- Matrix Element Operations ---
 Matrix elements have only two functions - add_aij_normal and add_aij_transpose
 They are never separately removed outside of removing rows or columns.
@@ -253,8 +253,7 @@ add_aij_transpose creates the links along the row.
 We traverse the CSC matrix twice. First in the regular column major order and call add_aij_normal.
 The second time we traverse the transpose(A) in column major order and call add_aij_transpose.
 Note that the matrix element is already created by the time we call the second function.
-`
-
+"
 function add_aij_normal!(verbose::Bool, p::Presolve_Problem, row_id::Int, col_id::Int, row_prev_id::Int, val::Float64)
     v = verbose
     v && println("Adding mat element (normal): $(row_id),$(col_id)")
@@ -298,15 +297,11 @@ function add_aij_transpose!(verbose::Bool, p::Presolve_Problem, row_id::Int, col
     end
 end
 
-`
+"
 --- Presolve Setup and Cleanup ---
 make_presolve       : Sets up the linked list connections.
 print_info          : Prints all the linked list information. Useful for debugging.
-make_new            : Converts the final presolve problem data into the format of the original problem
-`
-
-# The function make_presolve! "makes" the links between the necessary row or col or matrix elements
-# TODO: include rowlb and rowub support.
+make_new            : Converts the final presolve problem data into the format of the original problem"
 function make_presolve!(verbose::Bool, p::Presolve_Problem, A::SparseMatrixCSC{Float64,Int64}, collb::Array{Float64,1},colub::Array{Float64,1}, c::Array{Float64,1}, rowlb::Array{Float64,1},rowub::Array{Float64,1})
     v = verbose
     m,n = size(A)

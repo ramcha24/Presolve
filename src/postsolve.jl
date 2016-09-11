@@ -88,3 +88,5 @@ function roughly(x::Float64, y::Float64)
         return false
     end
 end
+
+# TODO.. cleanup these utility functions, why is there one of zero and one for roughly. make it into one function. no need unbounded functions. 

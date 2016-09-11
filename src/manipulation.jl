@@ -261,6 +261,8 @@ function add_aij_normal!(verbose::Bool, p::Presolve_Problem, row_id::Int, col_id
     aij = Presolve_Matrix()
     aij.row = p.dictrow[row_id]
     aij.col = p.dictcol[col_id]
+    p.rowcounter[row_id] += 1
+    p.colcounter[col_id] += 1
     aij.val = val
     aij.row_prev = aij
     aij.row_next = aij
@@ -336,8 +338,8 @@ function make_presolve!(verbose::Bool, p::Presolve_Problem, A::SparseMatrixCSC{F
             r = Arows[i]
             rcval = rc(r,j,p.originaln)
             #dictA[rcval] = Avals[i]
-            p.rowcounter[r] += 1
-            p.colcounter[j] += 1
+            #p.rowcounter[r] += 1
+            #p.colcounter[j] += 1
             add_aij_normal!(v,p,r,j,tmp,Avals[i])
             tmp = r
         end

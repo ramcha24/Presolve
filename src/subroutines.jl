@@ -26,10 +26,14 @@ function presolver!(verbose::Bool, p::Presolve_Problem, A::SparseMatrixCSC{Float
                     forcing_constraints(v,p,row,true)
                 end
             else
-                if(row.aij.row_next == row.aij)
-                    singleton_row!(v,p,row,false)
+                if(row.lb == -Inf && row.ub == Inf)
+                    free_row!(v,p,row)
                 else
-                    forcing_constraints(v,p,row,false)
+                    if(row.aij.row_next == row.aij)
+                        singleton_row!(v,p,row,false)
+                    else
+                        forcing_constraints(v,p,row,false)
+                    end
                 end
             end
         end
@@ -81,6 +85,11 @@ function empty_row!(verbose::Bool, p::Presolve_Problem, row::Presolve_Row)
     v && println("Exiting Empty Row")
 end
 
+function free_row!(verbose::Bool, p::Presolve_Problem, row::Presolve_Row)
+    # TODO.. dual variable
+    remove_row!(v,p,row)
+end
+
 function singleton_row!(verbose::Bool, p::Presolve_Problem, row::Presolve_Row, has_bval::Bool)
     v = verbose
     v && println("SINGETON ROW FOUND AT $(row.i)")
@@ -103,15 +112,17 @@ function singleton_row!(verbose::Bool, p::Presolve_Problem, row::Presolve_Row, h
         remove_row!(v,p,row)
     else
         #there is only one variable and it is of the form , lb <= aij*xj <= ub , check if it can be made tighter.
-        l_val = row.lb/matval
-        u_val = row.ub/matval
-        if(l_val > col.l)
-            col.l = l_val
-        end
+        l_val = (matval > 0) ? row.lb/matval : row.ub/matval
+        u_val = (matval > 0) ? row.ub/matval : row.lb/matval
 
-        if(u_val < col.u)
-            col.u = u_val
+        (l_val > col.u || u_val < col.l) && error("Infeasibility in singleton_row $(row.i) with double bound")
+
+        col.l = max(col.l,l_val)
+        col.u = min(col.u,u_val)
+        if(col.l == col.u)
+            fixed_col!(v,p,col)
         end
+        free_row!(v,p,row)
     end
 end
 

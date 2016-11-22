@@ -75,11 +75,13 @@ function empty_row!(verbose::Bool, p::Presolve_Problem, row::Presolve_Row)
     v = verbose
     v && println("EMPTY ROW FOUND AT $(row.i)")
 
-    if(!roughly(row.b_val,0.0))
-        error("Empty Row Infeasibility at row $row.i and b[i] is - $(row.b_val)")
+    if(row.lb > 0 || row.ub < 0)
+        error("Empty Row Infeasibility at row $row.i where the bounds are lb - $(row.lb), ub - $(row.ub)")
     else
         remove_row!(v,p,row)
-        p.activeconstr[row.i] = false
+        p.active_constr[row.i] = false
+        add_to_stack!(Linear_Dependency(row.i,0.0,3),p.independent_var,p.active_constr,p.pstack)
+        add_to_stack!(Linear_Dependency(row.i,0.0,4),p.independent_var,p.active_constr,p.pstack)
     end
 
     v && println("Exiting Empty Row")
@@ -87,6 +89,22 @@ end
 
 function free_row!(verbose::Bool, p::Presolve_Problem, row::Presolve_Row)
     # TODO.. dual variable
+    vec1 = Array{Int,1}()
+    vec2 = Array{Float64,1}()
+
+    tmp = row.aij
+    while(tmp != nothing)
+        push!(vec1,tmp.col.j)
+        push!(vec2,tmp.aij)
+        if(tmp.row_next != tmp)
+            tmp = tmp.row_next
+        else
+            tmp = nothing
+        end
+    end
+    add_to_stack!(Linear_Dependency(row.i,0.0,vec1,vec2,3),p.independent_var,p.active_constr,p.pstack)
+    add_to_stack!(Linear_Dependency(row.i,0.0,4),p.independent_var,p.active_constr,p.pstack)
+
     remove_row!(v,p,row)
 end
 
@@ -96,33 +114,54 @@ function singleton_row!(verbose::Bool, p::Presolve_Problem, row::Presolve_Row, h
 
     # TODO.. make the changes for has_bval to be true and for it to be false
 
+    redundancy_type = 0
     col = row.aij.col
     i = row.i
     j = col.j
     matval = row.aij.val
 
     if(has_bval)
-        b_val = row.aij.row.b_val
+        b_val = row.lb
         xj = b_val/matval
+        (xj < col.l) || (xj > col.u) && error("Primal Infeasibility in singleton_row $(row.i) with equality bound")
 
-        p.activeconstr[row.i] = false
+        #p.active_constr[row.i] = false
         col.l = col.u = xj
-
-        fixed_col!(v,p,col)
         remove_row!(v,p,row)
+        fixed_col!(v,p,col)
+        redundancy_type = 1
+        add_to_stack!(Linear_Dependency(j,0,2),p.independent_var,p.active_constr,p.pstack)
+        add_to_stack!(Linear_Dependency(i,b_val,3),p.independent_var,p.active_constr,p.pstack)
+        add_to_stack!(Linear_Dependency(i,0,4),p.independent_var,p.active_constr,p.pstack)
     else
         #there is only one variable and it is of the form , lb <= aij*xj <= ub , check if it can be made tighter.
         l_val = (matval > 0) ? row.lb/matval : row.ub/matval
         u_val = (matval > 0) ? row.ub/matval : row.lb/matval
 
-        (l_val > col.u || u_val < col.l) && error("Infeasibility in singleton_row $(row.i) with double bound")
+        (l_val > col.u || u_val < col.l) && error("Primal Infeasibility in singleton_row $(row.i) with double bound")
 
-        col.l = max(col.l,l_val)
-        col.u = min(col.u,u_val)
-        if(col.l == col.u)
+        if (col.l == col.u)
+            xj = col.l
             fixed_col!(v,p,col)
+            empty_row!(v,p,row)
+            add_to_stack!(Linear_Dependency(i,matval*xj,3),p.independent_var,p.active_constr,p.pstack)
+            add_to_stack!(Linear_Dependency(i,0,4),p.independent_var,p.active_constr,p.pstack)
+
+            redundancy_type = 2
+
+        else
+            col.l = max(col.l,l_val)
+            col.u = min(col.u,u_val)
+
+            # Figure out the exact conditions to add here for postsolving.
+            # remove_row!(v,p,row) ?
+
+            if(col.l == col.u)
+                fixed_col!(v,p,col)
+                empty_row!(v,p,row)
+                redundancy_type = 3
+            end
         end
-        free_row!(v,p,row)
     end
 end
 
@@ -228,16 +267,29 @@ function empty_col!(v::Bool, p::Presolve_Problem, col::Presolve_Col)
     v = verbose
     v && println("EMPTY COL FOUND AT $(col.j)")
 
-    if(col.c_val == 0.0)
-        # nothing to be done here. the variable has no effect on the problem. can just remove the column. fix it to value 0 (default)
-        add_to_stack!(LinearDependency(col.j,0),p.independentvar,p.pstack)
-    elseif (col.c_val > 0)
-        col.l == -Inf && error("Problem is unbounded due to variable $(col.j)")
-        add_to_stack!(LinearDependency(col.j,col.l),p.independentvar,p.pstack)
-    else
-        col.u == Inf && error("Problem is unbounded due to variable $(col.j)")
-        add_to_stack!(LinearDependency(col.j,col.u),p.independentvar,p.pstack)
+    if((col.c_val > 0 && col.l == -Inf) || (col.c_val < 0 && col.u == Inf))
+        error("Dual Infeasibility from empty col at $(col.j)")
     end
+
+    if(col.l == -Inf && col.u == Inf)
+        add_to_stack!(Linear_Dependency(col.j,0,1),p.independent_var,p.active_constr,p.pstack)
+    elseif (col.l == -Inf)
+        add_to_stack!(Linear_Dependency(col.j,col.u,1),p.independent_var,p.active_constr,p.pstack)
+    elseif (col.u == -Inf)
+        add_to_stack!(Linear_Dependency(col.j,col.l,1),p.independent_var,p.active_constr,p.pstack)
+    elseif (col.l != col.u)
+        if(col.c_val > 0)
+            add_to_stack!(Linear_Dependency(col.j,col.l,1),p.independent_var,p.active_constr,p.pstack)
+        elseif (col.c_val < 0)
+            add_to_stack!(Linear_Dependency(col.j,col.u,1),p.independent_var,p.active_constr,p.pstack)
+        else
+            add_to_stack!(Linear_Dependency(col.j,col.l,1),p.independent_var,p.active_constr,p.pstack)
+        end
+    else
+        add_to_stack!(Linear_Dependency(col.j,col.l,1),p.independent_var,p.active_constr,p.pstack)
+
+    add_to_stack!(Linear_Dependency(col.j,col.c_val,2),p.independent_var,p.active_constr,p.pstack)
+    # TODO.. accounting for constant term in the objective function
     remove_col!(v,p,p.dictcol[col.j])
 end
 
@@ -247,21 +299,37 @@ function fixed_col!(v::Bool, p::Presolve_Problem, col::Presolve_Col)
 
     (col.l == -Inf || col.l == Inf) && error("Problem is unbounded due to variable $(col.j) in fixed col")
 
+    vec1 = Array{Int,1}()
+    vec2 = Array{Float64,1}()
+
     # need to substitute in the matrix whenever this variable occurs.
-    f_val = col.l
+    fixed_val = col.l
     tmp = col.aij
     while(tmp != nothing)
-        diff = f_val*tmp.val
-        tmp.row.b_val -= diff
-        tmp.row.lb -= diff
-        tmp.row.ub -= diff
+        diff = fixed_val*tmp.val
+
+        if(row.b_val != nothing)
+            tmp.row.b_val -= diff
+        end
+        if(row.lb != -Inf)
+            tmp.row.lb -= diff
+        end
+        if(row.ub != -Inf)
+            tmp.row.ub -= diff
+        end
+
+        push!(vec1,tmp.row.i)
+        push!(vec2,tmp.aij)
+
         if(tmp.col_next != tmp)
             tmp = tmp.col_next
         else
             tmp = nothing
         end
     end
-    add_to_stack!(LinearDependency(col.j,col.l),p.independentvar,p.pstack)
+    add_to_stack!(Linear_Dependency(col.j,0,vec1,vec2,2),p.independent_var,p.active_constr,p.pstack)
+    add_to_stack!(Linear_Dependency(col.j,fixed_val,1),p.independent_var,p.active_constr,p.pstack)
+
     remove_col!(v,p,p.dictcol[col.j])
 end
 

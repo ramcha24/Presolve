@@ -159,15 +159,16 @@ type Linear_Dependency <: Presolve_Stack
     vec1 :: Vector{Int}                     # indices of the variables that x[index] is dependent on
     vec2 :: Vector{Float64}                 # corresponding co-efficients of dependency. See above for an example
     value :: Float64                        # constant value of the Linear Dependence equation
+    flag::Int                               # takes value 1,2,3,4 depending on the type of LD
 
-    function Linear_Dependency(ind::Int, val::Number)
+    function Linear_Dependency(ind::Int, val::Float64, flag::Int)
         vec1 = Array{Int,1}()
         vec2 = Array{Float64,1}()
-        new(ind,vec1,vec2,val)
+        new(ind,vec1,vec2,val,flag)
     end
 
-    function Linear_Dependency(ind::Int, vec1::Vector{Int}, vec2::Vector{Float64}, val::Number)
-        new(ind,vec1,vec2,val)
+    function Linear_Dependency(ind::Int, vec1::Vector{Int}, vec2::Vector{Float64}, val::Float64)
+        new(ind,vec1,vec2,val,flag)
     end
 
 end
@@ -181,54 +182,65 @@ We have a constructor which initializes the variables to default values.
 "
 type Presolve_Problem
     # The dimensions of the original problem
-    originalm :: Int64                      # number of rows in original problem
-    originaln :: Int64                      # number of cols in original problem
+    originalm::Int64                      # number of rows in original problem
+    originaln::Int64                      # number of cols in original problem
 
     # Linked List storage
-    dictrow :: Dict{Int64,Presolve_Row}     # Rows of the original problem.
-    dictcol :: Dict{Int64,Presolve_Col}     # Cols of the original problem.
-    dictaij :: Dict{Int64,Presolve_Matrix}  # Non-zero entries of the constraint matrix
-    rowptr :: Presolve_Row                  # Reference to the first valid row. Will be updated as rows are deleted.
-    colptr :: Presolve_Col                  # Reference to the first valid col. Will be updated as cols are deleted.
-    rowque :: Presolve_Row                  # Reference to the first active row. Will be updated as rows are dequed.
-    colque :: Presolve_Col                  # Reference to the first independent col. Will be updated as cols are dequed.
+    dictrow::Dict{Int64,Presolve_Row}     # Rows of the original problem.
+    dictcol::Dict{Int64,Presolve_Col}     # Cols of the original problem.
+    dictaij::Dict{Int64,Presolve_Matrix}  # Non-zero entries of the constraint matrix
+    rowptr::Presolve_Row                  # Reference to the first valid row. Will be updated as rows are deleted.
+    colptr::Presolve_Col                  # Reference to the first valid col. Will be updated as cols are deleted.
+    rowque::Presolve_Row                  # Reference to the first active row. Will be updated as rows are dequed.
+    colque::Presolve_Col                  # Reference to the first independent col. Will be updated as cols are dequed.
 
     # Boolean status fields
-    independentvar :: BitArray{1}
-    activeconstr :: BitArray{1}
+    independent_var::BitArray{1}
+    active_constr::BitArray{1}
 
     # counter variables for aij elements in row/col. Can be done away with probably.
-    rowcounter :: Array{Float64,1}
-    colcounter :: Array{Float64,1}
+    rowcounter::Array{Float64,1}
+    colcounter::Array{Float64,1}
 
     # the stack that will be fed into the postsolver.
-    pstack :: Array{Presolve_Stack,1}
+    pstack::Array{Presolve_Stack,1}
 
     # map from the index of the inital rows to final rows. -1 if they are deleted.
-    finalrows :: Array{Int,1}
-    finalcols :: Array{Int,1}
+    finalrows::Array{Int,1}
+    finalcols::Array{Int,1}
 
     # Constructor that creates a Presolve_Problem
     function Presolve_Problem(verbose::Bool,m::Int,n::Int)
         verbose && println("-----------INSIDE PRESOLVE CONSTRUCTOR------------")
 
         originalm,originaln = m,n
+
         dictrow = Dict{Int64,Presolve_Row}()
         dictcol = Dict{Int64,Presolve_Col}()
         dictaij = Dict{Int64,Presolve_Matrix}()
+
         rowptr = Presolve_Row()
         colptr = Presolve_Col()
         rowque = Presolve_Row()
         colque = Presolve_Col()
-        independentvar = trues(originaln)
-        activeconstr = trues(originalm)
+
+        independent_var = trues(originaln)
+        active_constr = trues(originalm)
+
         rowcounter = zeros(originalm)
         colcounter = zeros(originaln)
+
         pstack = Array{Presolve_Stack,1}()
+
         finalrows = fill(-1,originalm)              # Initially everything is -1.
         finalcols = fill(-1,originaln)
 
-        new(originalm,originaln,dictrow,dictcol,dictaij,rowptr,colptr,rowque,colque,independentvar,activeconstr,rowcounter,colcounter,pstack,finalrows,finalcols)
+        constr_primal = fill(0.0,originalm)
+        constr_dual = fill(0.0,originalm)
+        var_primal = fill(0.0,originaln)
+        var_dual = fill(0.0,originaln)
+
+        new(originalm,originaln,dictrow,dictcol,dictaij,rowptr,colptr,rowque,colque,independent_var,active_constr,rowcounter,colcounter,pstack,finalrows,finalcols)
     end
     function Presolve_Problem()
         return Presolve_Problem(false,0,0)

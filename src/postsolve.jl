@@ -1,4 +1,3 @@
-
 using MathProgBase
 
 "
@@ -7,11 +6,16 @@ add_to_stack!       : function that will add the Linear_Dependency element to th
 post_solve!         : function that will post solve one Linear_Dependency element.
 return_postsolved   : function that will take in the solution from solver for reduced problem and returns solution for original problem
 "
-function add_to_stack!(l::Linear_Dependency, independentvar::BitArray{1}, pstack::Array{Presolve_Stack,1})
+
+function add_to_stack!(l::Linear_Dependency, independentvar::BitArray{1}, active_constr::BitArray{1}, pstack::Array{Presolve_Stack,1})
     if (length(l.vec1) != length(l.vec2))
         error("vector1 size not equal to vector 2 size for LD element")
     end
-    independentvar[l.index] = false # the variable at this index is not independent anymore
+    if (l.flag == 1 || l.flag == 2)
+        independentvar[l.index] = false # the variable at this index is not independent anymore
+    elseif (l.flag == 3 || l.flag == 4)
+        active_constr[l.index] = false # ??
+
     push!(pstack,l)
 end
 
@@ -24,18 +28,34 @@ function post_solve!(post_solvedX::Array{Float64,1}, l::Linear_Dependency)
     end
 end
 
-function return_postsolved(x::Array{Float64,1}, independentvar::BitArray{1}, pstack :: Array{Presolve_Stack,1})
-    postsolvedX = zeros(length(independentvar))
-    newcols = find(independentvar)
+function return_postsolved(cpsol::Array{Float64,1},cdsol::Array{Float64,1},vpsol::Array{Float64,1},vdsol::Array{Float64,1}, independent_var::BitArray{1}, active_constr::BitArray{1}, pstack :: Array{Presolve_Stack,1})
+    n = length(independent_var)
+    m = length(active_constr)
+
+    var_primalsol = zeros(n)
+    var_dualsol = zeros(n)
+    constr_primalsol = zeros(m)
+    constr_dualsol = zeros(m)
+
+    sol = [var_primalsol,var_dualsol,constr_primalsol,constr_dualsol]
+
+    newcols = find(independent_var)
+    newrows = find(active_constr)
 
     for i in 1:length(newcols)
-        postsolvedX[newcols[i]] = x[i]
+        var_primalsol[newcols[i]] = vpsol[i]
+        var_dualsol[newcols[i]] = vdsol[i]
+    end
+
+    for i in 1:length(newrows)
+        constr_primalsol[newrows[i]] = cpsol[i]
+        constr_dualsol[newrows[i]] = cdsol[i]
     end
 
     for i in reverse(collect(1:length(pstack)))
-        post_solve!(postsolvedX,pstack[i])
+        post_solve!(sol[pstack[i].flag],pstack[i])
     end
-    return postsolvedX
+    return sol
 end
 
 "
@@ -89,4 +109,4 @@ function roughly(x::Float64, y::Float64)
     end
 end
 
-# TODO.. cleanup these utility functions, why is there one of zero and one for roughly. make it into one function. no need unbounded functions. 
+# TODO.. cleanup these utility functions, why is there one of zero and one for roughly. make it into one function. no need unbounded functions.

@@ -359,63 +359,6 @@ function make_presolve!(verbose::Bool, p::Presolve_Problem, A::SparseMatrixCSC{F
     end
 end
 
-# For Debugging.
-function print_info(p::Presolve_Problem)
-    println("Row Information--------------------------------------")
-    for key in keys(p.dictrow)
-        println("-----------")
-        row = p.dictrow[key]
-        @show row.i
-        @show row.lb
-        @show row.ub
-        @show row.b_val
-        if(row.aij != nothing)
-            @show row.aij.row.i
-            @show row.aij.col.j
-            @show row.aij.val
-        end
-        @show row.prev.i
-        @show row.next.i
-        @show row.is_active
-        @show row.active_prev.i
-        @show row.active_next.i
-    end
-
-    println("Col Information-------------------------------------------")
-    for key in keys(p.dictcol)
-        println("-----------")
-        col = p.dictcol[key]
-        @show col.j
-        @show col.c_val
-        @show col.l
-        @show col.u
-        if(col.aij != nothing)
-            @show col.aij.row.i
-            @show col.aij.col.j
-            @show col.aij.val
-        end
-        @show col.prev.j
-        @show col.next.j
-        @show col.is_independent
-        @show col.ind_prev.j
-        @show col.ind_next.j
-    end
-
-    println("MAT ELEMENT Information---------------------------")
-    for key in keys(p.dictaij)
-        println("-----------")
-        aij = p.dictaij[key]
-        @show aij.row.i
-        @show aij.col.j
-        @show aij.val
-
-        @show aij.row_prev.row.i, aij.row_prev.col.j, aij.row_prev.val
-        @show aij.row_next.row.i, aij.row_next.col.j, aij.row_next.val
-        @show aij.col_prev.row.i, aij.col_prev.col.j, aij.col_prev.val
-        @show aij.col_next.row.i, aij.col_next.col.j, aij.col_next.val
-    end
-end
-
 # Constructs the reduced problem
 function make_new(verbose::Bool, p::Presolve_Problem)
     v = verbose
@@ -498,4 +441,62 @@ function make_new(verbose::Bool, p::Presolve_Problem)
     end
     newA = sparse(I,J,Val,currentm,currentn)
     return newA,newcollb,newcolub,newc,newrowlb,newrowub
+end
+
+
+# For Debugging.
+function print_info(p::Presolve_Problem)
+    println("Row Information--------------------------------------")
+    for key in keys(p.dictrow)
+        println("-----------")
+        row = p.dictrow[key]
+        @show row.i
+        @show row.lb
+        @show row.ub
+        @show row.b_val
+        if(row.aij != nothing)
+            @show row.aij.row.i
+            @show row.aij.col.j
+            @show row.aij.val
+        end
+        @show row.prev.i
+        @show row.next.i
+        @show row.is_active
+        @show row.active_prev.i
+        @show row.active_next.i
+    end
+
+    println("Col Information-------------------------------------------")
+    for key in keys(p.dictcol)
+        println("-----------")
+        col = p.dictcol[key]
+        @show col.j
+        @show col.c_val
+        @show col.l
+        @show col.u
+        if(col.aij != nothing)
+            @show col.aij.row.i
+            @show col.aij.col.j
+            @show col.aij.val
+        end
+        @show col.prev.j
+        @show col.next.j
+        @show col.is_independent
+        @show col.ind_prev.j
+        @show col.ind_next.j
+    end
+
+    println("MAT ELEMENT Information---------------------------")
+    for key in keys(p.dictaij)
+        println("-----------")
+        aij = p.dictaij[key]
+        @show aij.row.i
+        @show aij.col.j
+        @show aij.val
+
+        @show aij.row_prev.row.i, aij.row_prev.col.j, aij.row_prev.val
+        @show aij.row_next.row.i, aij.row_next.col.j, aij.row_next.val
+        @show aij.col_prev.row.i, aij.col_prev.col.j, aij.col_prev.val
+        @show aij.col_next.row.i, aij.col_next.col.j, aij.col_next.val
+    end
 end

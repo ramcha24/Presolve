@@ -26,6 +26,7 @@ type PresolveMathProgModel <: AbstractMathProgModel
     solve_stat::Symbol
     obj_val::Float64
     primal_sol::Array{Float64,1}
+    dual_sol::Array{Float64,1}
     innermodel :: AbstractMathProgModel
     realsolver #gives an error if I specify the type. Can't converr from SCSSolver to AbstractMathProgSolver
     function PresolveMathProgModel()
@@ -126,6 +127,7 @@ function loadproblem!(model::PresolveMathProgModel, c, A::SparseMatrixCSC, b, co
 
     make_presolve!(false,model.p,A,collb,colub,c,rowlb,rowub)
 
+    #TODO.. add code for Dual Variables.
     newA,newcollb,newcolub,newc,newrowlb,newrowub = presolver!(false,model.p,A,collb,colub,c,rowlb,rowub)
 
     loadproblem!(model.innermodel,A,collb,colub,c,rowlb,rowub,model.orig_sense)
@@ -134,18 +136,59 @@ function loadproblem!(model::PresolveMathProgModel, c, A::SparseMatrixCSC, b, co
 end
 
 function optimize!(m::PresolveMathProgModel)
-    ans = Array{Float64,1}()
+    constr_primalsol = Array{Float64,1}()
+    constr_dualsol = Array{Float64,1}()
+    var_primalsol = Array{Float64,1}()
+    var_dualsol = Array{Float64,1}()
+
     if(length(find(m.p.independentvar))!=0)
         optimize!(m.innermodel)
         if(m.innermodel.solve_stat!= :Optimal)
             error("Problem status is not optimal, solution might be inaccurate")
         end
         m.solve_stat = m.innermodel.solve_stat
-        ans = m.innermodel.getsolution()
+        constr_primalsol = m.innermodel.getconstrsolution()
+        constr_dualsol = m.innermodel.getconstrduals()
+        var_primalsol = m.innermodel.getsolution()
+        var_dualsol = m.innermodel.getreducedcosts()
+
+        #TODO.. need to account for DUAL VARIABLES HERE.
     end
-    m.primal_sol = return_postsolved(ans,m.p.independentvar,m.p.pstack)
+
+    sol = return_postsolved(constr_primalsol,constr_dualsol,var_primalsol,var_dualsol,m.p.independentvar,m.p.pstack)
+
+    m.primal_sol = sol[1]
+    # WHAT exactly is the dual sol in the conic problem format.
+    # figure that out by reading the cblib or mosek manual. Might need to convert lp dual to conic dual.
+    m.dual_sol = sol[2]
     m.obj_val = dot(m.c, m.primal_sol)
+
+    # you should get the dual solution and then convert it to the type required for Conic Models.
 end
 
-
 # TODO: getdual and getvardaul, can be done once add the dualsolution support for all the presolve routines.
+function getdual(m::PresolveMathProgModel)
+    dual = m.dual_sol[m.row_map_ind]
+    # flip sign for NonPos since it's treated as NonNeg by SCS
+    for i in 1:length(m.row_map_type)
+        if m.row_map_type[i] == :NonPos
+            dual[i] = -dual[i]
+        end
+    end
+    return dual
+end
+
+function getvardual(m::PresolveMathProgModel)
+    dual = zeros(length(m.col_map_ind))
+    for i in 1:length(m.col_map_type)
+        if m.col_map_type[i] == :Free
+            continue # dual is zero
+        elseif m.col_map_type[i] == :NonPos
+            # flip sign for NonPos since it's treated as NonNeg by SCS
+            dual[i] = -m.dual_sol[m.col_map_ind[i]]
+        else
+            dual[i] = m.dual_sol[m.col_map_ind[i]]
+        end
+    end
+    return dual
+end

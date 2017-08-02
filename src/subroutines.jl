@@ -21,18 +21,18 @@ function presolver!(verbose::Bool, p::Presolve_Problem, A::SparseMatrixCSC{Float
         else
             if(row.lb == row.ub)
                 if(row.aij.row_next == row.aij)
-                    singleton_row!(v,p,row,true)
+                    singleton_row_eq!(v,p,row)
                 else
-                    forcing_constraints(v,p,row,true)
+                    forcing_constraints_eq!(v,p,row)
                 end
             else
                 if(row.lb == -Inf && row.ub == Inf)
                     free_row!(v,p,row)
                 else
                     if(row.aij.row_next == row.aij)
-                        singleton_row!(v,p,row,false)
+                        singleton_row_ineq!(v,p,row)
                     else
-                        forcing_constraints(v,p,row,false)
+                        forcing_constraints_ineq!(v,p,row)
                     end
                 end
             end
@@ -72,23 +72,28 @@ function presolver!(verbose::Bool, p::Presolve_Problem, A::SparseMatrixCSC{Float
 end
 
 function empty_row!(verbose::Bool, p::Presolve_Problem, row::Presolve_Row)
+    # output notif
     v = verbose
     v && println("EMPTY ROW FOUND AT $(row.i)")
 
-    if(row.lb > 0 || row.ub < 0)
+    # feasibility check
+    if(row.lb > 0 || row.ub < 0 || row.lb > row.ub)
         error("Empty Row Infeasibility at row $row.i where the bounds are lb - $(row.lb), ub - $(row.ub)")
     else
+        # fixing constraint primal y_i and dual (alpha-beta)_i.
+        add_to_stack!(Empty_Row(row.i),p.independent_var,p.active_constr,p.pstack)
+        # row is redundant now.
         remove_row!(v,p,row)
-        p.active_constr[row.i] = false
-        add_to_stack!(Linear_Dependency(row.i,0.0,3),p.independent_var,p.active_constr,p.pstack)
-        add_to_stack!(Linear_Dependency(row.i,0.0,4),p.independent_var,p.active_constr,p.pstack)
     end
 
+    # output notif
     v && println("Exiting Empty Row")
 end
 
 function free_row!(verbose::Bool, p::Presolve_Problem, row::Presolve_Row)
-    # TODO.. dual variable
+    # making lin dep for constraint primal y_i
+    v = verbose
+
     vec1 = Array{Int,1}()
     vec2 = Array{Float64,1}()
 
@@ -102,100 +107,98 @@ function free_row!(verbose::Bool, p::Presolve_Problem, row::Presolve_Row)
             tmp = nothing
         end
     end
-    add_to_stack!(Linear_Dependency(row.i,0.0,vec1,vec2,3),p.independent_var,p.active_constr,p.pstack)
-    add_to_stack!(Linear_Dependency(row.i,0.0,4),p.independent_var,p.active_constr,p.pstack)
-
+    l = Linear_Dependency(row.i,0.0,vec1,vec2)
+    # fixing y_i and (alpha-beta)_i
+    add_to_stack!(Free_Row(row.i,l),p.independent_var,p.active_constr,p.pstack)
+    # row is redundant now.
     remove_row!(v,p,row)
 end
 
-function singleton_row!(verbose::Bool, p::Presolve_Problem, row::Presolve_Row, has_bval::Bool)
+function singleton_row_eq!(verbose::Bool, p::Presolve_Problem, row::Presolve_Row, has_bval::Bool)
     v = verbose
-    v && println("SINGETON ROW FOUND AT $(row.i)")
 
-    # TODO.. make the changes for has_bval to be true and for it to be false
-
-    redundancy_type = 0
+    matval = row.aij.val
     col = row.aij.col
     i = row.i
     j = col.j
-    matval = row.aij.val
+    y_i = row.lb
+    x_j = y_i/matval
 
-    if(has_bval)
-        b_val = row.lb
-        xj = b_val/matval
-        (xj < col.l) || (xj > col.u) && error("Primal Infeasibility in singleton_row $(row.i) with equality bound")
+    (x_j > col.u || x-j < col.l) && error("Primal Infeasibility in singleton_row $(row.i) with equality")
 
-        #p.active_constr[row.i] = false
-        col.l = col.u = xj
-        remove_row!(v,p,row)
-        fixed_col!(v,p,col)
-        redundancy_type = 1
-        add_to_stack!(Linear_Dependency(j,0,2),p.independent_var,p.active_constr,p.pstack)
-        add_to_stack!(Linear_Dependency(i,b_val,3),p.independent_var,p.active_constr,p.pstack)
-        add_to_stack!(Linear_Dependency(i,0,4),p.independent_var,p.active_constr,p.pstack)
-    else
-        #there is only one variable and it is of the form , lb <= aij*xj <= ub , check if it can be made tighter.
-        l_val = (matval > 0) ? row.lb/matval : row.ub/matval
-        u_val = (matval > 0) ? row.ub/matval : row.lb/matval
-
-        (l_val > col.u || u_val < col.l) && error("Primal Infeasibility in singleton_row $(row.i) with double bound")
-
-        if (col.l == col.u)
-            xj = col.l
-            fixed_col!(v,p,col)
-            empty_row!(v,p,row)
-            add_to_stack!(Linear_Dependency(i,matval*xj,3),p.independent_var,p.active_constr,p.pstack)
-            add_to_stack!(Linear_Dependency(i,0,4),p.independent_var,p.active_constr,p.pstack)
-
-            redundancy_type = 2
-
-        else
-            col.l = max(col.l,l_val)
-            col.u = min(col.u,u_val)
-
-            # Figure out the exact conditions to add here for postsolving.
-            # remove_row!(v,p,row) ?
-
-            if(col.l == col.u)
-                fixed_col!(v,p,col)
-                empty_row!(v,p,row)
-                redundancy_type = 3
-            end
-        end
-    end
+    add_to_stack!(Singleton_Row_Equality(i,j,x_j,y_i),p.independent_var,p.active_constr,p.pstack)
+    remove_row!(v,p,row)
+    col.l = col.u = xj
+    fixed_col!(v,p,col)
 end
 
-function forcing_constraints!(verbose::Bool, p::Presolve_Problem, row::Presolve_Row, has_bval::Bool)
-    tmp = row.aij
-    # make g and h. traverse through each aij element in the row.
-    g = 0
-    while(tmp != nothing)
-        if(g == -Inf || g == +Inf)
-            break
-        end
-        if(tmp.val < 0)
-            g += tmp.val * tmp.col.u
-        else
-            g += tmp.val * tmp.col.u
-        end
+function singleton_row_ineq!(verbose::Bool, p::Presolve_Problem, row::Presolve_Row, has_bval::Bool)
+    v = verbose
+    v && println("SINGlETON ROW FOUND AT $(row.i)")
 
+    matval = row.aij.val
+    col = row.aij.col
+    i = row.i
+    j = col.j
+
+    if(matval > 0)
+        l_new = row.lb / matval
+        u_new = row.ub / matval
+    else
+        l_new = row.ub / matval
+        u_new = row.lb / matval
+    end
+
+    (l_new > col.u || u_new < col.l) && error("Primal Infeasibility in singleton_row $(row.i) with double bound")
+
+    if(l_new <= col.l && col.u <= u_new)
+        row_bound = 1
+    elseif(l_new <= col.l && col.u > u_new)
+        row_bound = 2
+    elseif(l_new > col.l && col.u <= u_new)
+        row_bound = 3
+    else
+        row_bound = 4
+    end
+
+    vec1 = Array{Int,1}()
+    vec2 = Array{Float64,1}()
+
+    tmp = row.aij
+    while(tmp != nothing)
+        push!(vec1,tmp.col.j)
+        push!(vec2,tmp.aij)
         if(tmp.row_next != tmp)
             tmp = tmp.row_next
         else
             tmp = nothing
         end
     end
+    l = Linear_Dependency(row.i,0.0,vec1,vec2)
+
+    col.l = max(col.l,l_new)
+    col.u = min(col.u,u_new)
+    add_to_stack!(Singleton_Row_Inequality(i,j,l,l_new,u_new,row_bound,matval),p.independent_var,p.active_constr,p.pstack)
+    remove_row!(v,p,row)
+end
+
+function forcing_constraints_eq!(verbose::Bool, p::Presolve_Problem, row::Presolve_Row, has_bval::Bool)
+    v = verbose
 
     tmp = row.aij
+    # make g and h. traverse through each aij element in the row.
+    g = 0
     h = 0
     while(tmp != nothing)
-        if(h == -Inf || h == +Inf)
-            break
+        if ((g == -Inf || g == +Inf) || (h == -Inf || h == +Inf))
+            return
         end
         if(tmp.val < 0)
+            g += tmp.val * tmp.col.u
             h += tmp.val * tmp.col.l
         else
-            h += tmp.val * tmp.col.l
+            g += tmp.val * tmp.col.l
+            h += tmp.val * tmp.col.u
         end
 
         if(tmp.row_next != tmp)
@@ -207,59 +210,65 @@ function forcing_constraints!(verbose::Bool, p::Presolve_Problem, row::Presolve_
 
     (h < row.lb || g > row.ub) && error("Infeasible problem in forcing constraints procedure")
 
-    if(has_bval)
-        b_val = row.b_val
-        # analysis
-        if(is_zero(g-b_val))
-            v && println("Found lower bound Forcing constraint at row $i")
-            #we can fix all variables in this row to their lowerbound or upperbound.
-            tmp = row.aij
-            while(tmp != nothing)
-                col = tmp.col
-                if(tmp.val > 0)
-                    col.u = col.l
-                else
-                    col.l = col.u
-                end
-                fixed_col!(v,p,col)
+    # analysis
 
-                if(tmp.row_next != tmp)
-                    tmp = tmp.row_next
-                else
-                    tmp = nothing
-                end
+    col_ind = Array{Int,1}()
+    col_bound = Array{Int,1}()
+    mat_val = Array{Float64,1}()
+    if( g == row.ub )
+        v && println("Found lower bound Forcing constraint at row $i")
+        #we can fix all variables in this row to their lowerbound or upperbound.
+        tmp = row.aij
+        while(tmp != nothing)
+            col = tmp.col
+            push!(col_ind,col.j)
+            push!(mat_val,tmp.val)
+            if(tmp.val > 0)
+                col.u = col.l
+                push!(col_bound,-1)
+            else
+                col.l = col.u
+                push!(col_bound,1)
             end
-            remove_row!(v,p,row)
-        elseif(is_zero(h-b_val))
-            v && println("Found upper bound Forcing constraint at row $i")
-            #we can fix all variables in this row to their lowerbound or upperbound.
-            tmp = row.aij
-            while(tmp != nothing)
-                col = tmp.col
-                if(tmp.val > 0)
-                    col.l = col.u
-                else
-                    col.u = col.l
-                end
-                fixed_col!(v,p,col)
+            fixed_col!(v,p,col)
 
-                if(tmp.row_next != tmp)
-                    tmp = tmp.row_next
-                else
-                    tmp = nothing
-                end
+            if(tmp.row_next != tmp)
+                tmp = tmp.row_next
+            else
+                tmp = nothing
             end
-            remove_row!(v,p,row)
         end
-    else
-        # here we have g <= ub and lb <= h, If g is tighter than lb, update. If h is tighter than ub, update
-        if(g > row.lb)
-            row.lb = g
+        add_to_stack!(Forcing_Row(row.i,col_ind,col_bound,mat_val,g),p.independent_var,p.active_constr,p.pstack)
+        remove_row!(v,p,row)
+    elseif( h == row.lb )
+        v && println("Found upper bound Forcing constraint at row $i")
+        #we can fix all variables in this row to their lowerbound or upperbound.
+        tmp = row.aij
+        while(tmp != nothing)
+            col = tmp.col
+            push!(col_ind,col.j)
+            push!(mat_val,tmp.val)
+            if(tmp.val > 0)
+                col.l = col.u
+                push!(col_bound,1)
+            else
+                col.u = col.l
+                push!(col_bound,-1)
+            end
+            fixed_col!(v,p,col)
+            if(tmp.row_next != tmp)
+                tmp = tmp.row_next
+            else
+                tmp = nothing
+            end
         end
-
-        if(h < row.ub)
-            row.ub = h
-        end
+        add_to_stack!(Forcing_Row(row.i,col_ind,col_bound,mat_val,h),p.independent_var,p.active_constr,p.pstack)
+        remove_row!(v,p,row)
+    elseif( g >= row.lb && h <= row.ub )
+        # here we have g < ub and lb < h, If g is tighter than lb, update. If h is tighter than ub, update
+        row.lb = -Inf
+        row.ub = Inf
+        free_row!(v,p,row)
     end
 end
 
@@ -272,23 +281,20 @@ function empty_col!(v::Bool, p::Presolve_Problem, col::Presolve_Col)
     end
 
     if(col.l == -Inf && col.u == Inf)
-        add_to_stack!(Linear_Dependency(col.j,0,1),p.independent_var,p.active_constr,p.pstack)
+        x_j = 0
     elseif (col.l == -Inf)
-        add_to_stack!(Linear_Dependency(col.j,col.u,1),p.independent_var,p.active_constr,p.pstack)
-    elseif (col.u == -Inf)
-        add_to_stack!(Linear_Dependency(col.j,col.l,1),p.independent_var,p.active_constr,p.pstack)
-    elseif (col.l != col.u)
-        if(col.c_val > 0)
-            add_to_stack!(Linear_Dependency(col.j,col.l,1),p.independent_var,p.active_constr,p.pstack)
-        elseif (col.c_val < 0)
-            add_to_stack!(Linear_Dependency(col.j,col.u,1),p.independent_var,p.active_constr,p.pstack)
-        else
-            add_to_stack!(Linear_Dependency(col.j,col.l,1),p.independent_var,p.active_constr,p.pstack)
-        end
+        x_j = col.u
+    elseif (col.u == Inf)
+        x_j = col.l
     else
-        add_to_stack!(Linear_Dependency(col.j,col.l,1),p.independent_var,p.active_constr,p.pstack)
+        if col.c_val >= 0
+            x_j = col.l
+        else
+            x_j = col.u
+        end
+    end
 
-    add_to_stack!(Linear_Dependency(col.j,col.c_val,2),p.independent_var,p.active_constr,p.pstack)
+    add_to_stack!(Empty_Col(col.j,x_j,col.c_val),p.independent_var,p.active_constr,p.pstack)
     # TODO.. accounting for constant term in the objective function
     remove_col!(v,p,p.dictcol[col.j])
 end
@@ -327,14 +333,13 @@ function fixed_col!(v::Bool, p::Presolve_Problem, col::Presolve_Col)
             tmp = nothing
         end
     end
-    add_to_stack!(Linear_Dependency(col.j,0,vec1,vec2,2),p.independent_var,p.active_constr,p.pstack)
-    add_to_stack!(Linear_Dependency(col.j,fixed_val,1),p.independent_var,p.active_constr,p.pstack)
+    add_to_stack!(Fixed_Col(col.j,fixed_val,col.c,Linear_Dependency(col.j,0,vec1,vec2)),p.independent_var,p.active_constr,p.pstack)
 
     remove_col!(v,p,p.dictcol[col.j])
 end
 
-function singleton_col!(p::Presolve_Problem, v::Bool)
 
+function singleton_col!(v::Bool, p::Presolve_Problem, col::Presolve_Col)
 end
 
 

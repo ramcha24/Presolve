@@ -1,5 +1,7 @@
 export Presolve_Element, Presolve_Row, Presolve_Col, Presolve_Matrix
 export Presolve_Stack, Linear_Dependency
+export Empty_Row, Free_Row, Singleton_Row_Equality, Singleton_Row_Inequality, Forcing_Row
+export Empty_Col, Fixed_Col, Singleton_Col
 export Presolve_Problem
 
 "
@@ -16,9 +18,7 @@ The information we store about the problem is logically divided into - rows (m-d
 
 Presolve_Element is the overall abstract type for storing the information about the LP problem.
 The three subtypes are Presolve_Row , Presolve_Col , Presolve_Matrix
-"
 
-"
 --- Active Rows and Independent Columns ---
 The Presolve_Row and Presolve_Col data types defined below holds two doubly linked lists within it.
 First - the normal previous and next references for rows(cols) of constraint matrix.
@@ -154,7 +154,7 @@ vec2 here is [-1/3, -4/3, -2/3, 1/3]
 
 For a row singleton vec1 and vec2 are empty.
 "
-type Linear_Dependency <: Presolve_Stack
+type Linear_Dependency
     index :: Int                            # index of the variable that is being presolved wrt original problem.
     vec1 :: Vector{Int}                     # indices of the variables that x[index] is dependent on
     vec2 :: Vector{Float64}                 # corresponding co-efficients of dependency. See above for an example
@@ -168,10 +168,92 @@ type Linear_Dependency <: Presolve_Stack
     end
 
     function Linear_Dependency(ind::Int, vec1::Vector{Int}, vec2::Vector{Float64}, val::Float64)
+        if (length(vec1) != length(vec2))
+            error("Cannot create. vector1 size not equal to vector 2 size for LD element")
+        end
+
         new(ind,vec1,vec2,val,flag)
+    end
+end
+
+# Redundant Row Types
+type Empty_Row <: Presolve_Stack
+    i :: Int
+    function Empty_Row(i :: Int)
+        new(i)
+    end
+end
+
+type Free_Row <: Presolve_Stack
+    i :: Int
+    l :: Linear_Dependency
+    function Free_Row(i::Int, l::Linear_Dependency)
+        new(i,l)
+    end
+end
+
+type Singleton_Row_Equality <: Presolve_Stack
+    i :: Int
+    j :: Int
+    x_j :: Int
+    y_i :: Int
+    function Singleton_Row(i::Int, j::Int, x_j::Int, y_i::Int)
+        new(i,j,x_j,y_i)
+    end
+end
+
+type Singleton_Row_Inequality <: Presolve_Stack
+    i :: Int
+    j :: Int
+    l :: Linear_Dependency
+    l_new :: Float64
+    u_new :: Float64
+    row_bound :: Int # 1 to 4
+    matval :: Float64 # (>0) or (<0)
+
+    function Singleton_Row(i::Int, j::Int, l::Linear_Dependency, l_new :: Float64, u_new :: Float64, row_bound::Int, matval_type::Float64)
+        new(i,j,l,l_new,u_new,row_bound,matval)
+    end
+end
+
+type Forcing_Row <: Presolve_Stack
+    i :: Int
+    col_ind :: Array{Int,1} # list of col variables that were fixed here
+    col_bound :: Array{Int,1}  # which bound they were fixed to -1 for lower, +1 for upper
+    mat_val :: Array{Float64,1}
+    fixed_val :: Float64
+    function Forcing_Row(i::Int, col_ind::Array{Int,1}, col_bound::Array{Int,1}, mat_val::Array{Float64,1}, fixed_val::Float64)
+        new(i,col_ind,col_bound,mat_val,fixed_val)
+    end
+end
+
+# Redundant Column Types
+type Empty_Col <: Presolve_Stack
+    j::Int
+    x_j::Int
+    c_j::Int
+    function Empty_Col(j::Int, x_j::Int, c_j::Int)
+        new(j,x_j,c_j)
     end
 
 end
+
+type Fixed_Col <: Presolve_Stack
+    j :: Int
+    x_j :: Int
+    l :: Linear_Dependency
+    function Fixed_Col(j::Int, x_j::Int, l::Linear_Dependency)
+        new(j,x_j,l)
+    end
+end
+
+type Singleton_Col <: Presolve_Stack
+    j :: Int
+    function Singleton_Col(j :: Int)
+        new(j)
+    end
+end
+
 
 "
 --- Presolve Problem ---
@@ -180,7 +262,7 @@ our internal workspace consist of problem type Presolve_Problem which holds info
 This is never accessed by the user and its scope is the presolver! function call.
 We have a constructor which initializes the variables to default values.
 "
-type Presolve_Problem
+type Presolve_Problem 
     # The dimensions of the original problem
     originalm::Int64                      # number of rows in original problem
     originaln::Int64                      # number of cols in original problem
@@ -235,6 +317,7 @@ type Presolve_Problem
         finalrows = fill(-1,originalm)              # Initially everything is -1.
         finalcols = fill(-1,originaln)
 
+        #are tjese needed from here?
         constr_primal = fill(0.0,originalm)
         constr_dual = fill(0.0,originalm)
         var_primal = fill(0.0,originaln)

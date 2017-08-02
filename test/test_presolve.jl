@@ -1,7 +1,8 @@
-# OUTDATED... 
+# OUTDATED...
 
 using MathProgBase
 using GLPKMathProgInterface
+using Presolve
 
 function make_lp(m::Int, n::Int, s::Float64)
     #m = rand((1:100))
@@ -15,11 +16,14 @@ function make_lp(m::Int, n::Int, s::Float64)
     x = rand((1:1000),n)
     A = sprand(m,n,s)
     b = A*x
-    lb = float(copy(x))
+    rowlb = b
+    rowub = b
+    collb = float(copy(x))
     #ub = 1000000*ones(n)
     #lb = fill(-Inf,n)
-    ub = fill(Inf,n)
-    return m,n,c,A,b,lb,ub,x
+    colub = fill(Inf,n)
+    #return m,n,c,A,b,lb,ub,x
+    return m,n,A,collb,colub,c,rowlb,rowub,x
 end
 
 function make_lp(m::Int, n::Int, s::Float64, nice::Bool)
@@ -41,11 +45,14 @@ function make_lp(m::Int, n::Int, s::Float64, nice::Bool)
     A = sparse(a)
     b = A*x
     #lb = fill(-Inf,n)
-    ub = fill(Inf,n)
+    colub = fill(Inf,n)
 
-    lb = float(copy(x))
-#    ub = 10.0*ones(n)
-    return m,n,c,A,b,lb,ub,x
+    collb = float(copy(x))
+    rowlb = b
+    rowub = b
+    #    ub = 10.0*ones(n)
+    #return m,n,c,A,b,lb,ub,x
+    return m,n,A,collb,colub,c,rowlb,rowub,x
 end
 
 # this is only needed because of the way I have generated sample LP instances. Not significant time cost anyway
@@ -64,43 +71,48 @@ function correctness_test(in1::Int, in2::Int, in3::Float64, in4::Bool)
     j=1
     tol = 1e-3
 
-    while(i<= 100)
+    while(i<= 5)
         @show i,j
         println("---------STARTING ITERATION $i---------")
-        m,n,c,A,b,lb,ub,x = make_lp(in1,in2,in3,true)
+        m,n,A,collb,colub,c,rowlb,rowub,x = make_lp(in1,in2,in3,true)
         tolerance = tol * ones(n)
         in4 && @show x
-        in4 && @show c
         in4 && @show full(A)
-        in4 && @show b
-        in4 && @show lb
-        in4 && @show ub
+        in4 && @show collb
+        in4 && @show colub
+        in4 && @show c
+        in4 && @show rowlb
+        in4 && @show rowub
 
-        newc,newA,newb,newlb,newub,independentvar,pstack = presolver!(true,c,A,b,lb,ub)
+        # p = Presolve_Problem(true,m,n)
+
+        newA,newcollb,newcolub,newc,newrowlb,newrowub,independentvar,active_constr,pstack = presolver!(false,A,collb,colub,c,rowlb,rowub)
 
         println("AFTER PRESOLVER CALL -------------")
         in4 && @show size(newA), typeof(newA)
         in4 && @show full(newA)
+        in4 && @show size(newcollb),size(newcolub)
+        in4 && @show newcollb
+        in4 && @show newcolub
         in4 && @show size(newc)
         in4 && @show newc
-        in4 && @show size(newb)
-        in4 && @show newb
+        in4 && @show size(newrowlb),size(newrowub)
+        in4 && @show newrowlb
+        in4 && @show newrowub
         in4 && @show size(x), typeof(x)
-        in4 && @show size(newlb),size(newub)
-        in4 && @show newlb
-        in4 && @show newub
         in4 && @show independentvar
         ans = Array{Float64,1}()
         #ans = fill(0.0,length(x))
         if(length(find(independentvar))!=0)
             #presol = linprog(newc, newA, '=', newb,newlb,newub, GLPKSolverLP(presolve=false))
-            presol = linprog(newc, newA, '=', newb,newlb,newub)
+            presol = linprog(newc, newA, newrowlb, newrowub, newcollb,newcolub)
             #presol = linprog(newc, newA, '=', newb, -Inf, Inf)
             in4 && println(newc)
             in4 && println(newA)
-            in4 && println(newb)
-            in4 && println(newlb)
-            in4 && println(newub)
+            in4 && println(newrowlb)
+            in4 && println(newrowub)
+            in4 && println(newcollb)
+            in4 && println(newcolub)
 
             in4 && @show ans = presol.sol
             in4 && @show independentvar
@@ -113,9 +125,9 @@ function correctness_test(in1::Int, in2::Int, in3::Float64, in4::Bool)
             #ans = presol.sol
         end
         #@show pstack
-        finalsol = return_postsolved(ans,independentvar,pstack)
+        finalsol = return_postsolved(ans,independentvar,active_constr,pstack)
         #@show finalsol
-        finalsol = trim(finalsol,lb)
+        finalsol = trim(finalsol,collb)
 
         in4 && @show x
         in4 && @show finalsol
@@ -217,7 +229,7 @@ end
 function do_tests(correctness::Bool, time::Bool)
     if(correctness)
         #correctness_tests
-        correctness_test(5,5,0.3,true)
+        correctness_test(5,5,0.3,false)
     end
 
     if(time)
@@ -257,15 +269,15 @@ println("My Presolve")
 
 end`
 
-#println("-------------------RANDOMIZED CORRECTNESS TESTS-----------------")
-#do_tests(true,false)
+println("-------------------RANDOMIZED CORRECTNESS TESTS-----------------")
+do_tests(true,false)
 #noob_test()
 
-time_test(1,1,0.3,false)
+#time_test(1,1,0.3,false)
 #Profile.clear()
 
-println("-------------------RANDOMIZED TIME TESTS---------------------")
-do_tests(false,true)
+#println("-------------------RANDOMIZED TIME TESTS---------------------")
+#do_tests(false,true)
 #@profile do_tests(false,true)
 
 #Profile.print(format=:flat)

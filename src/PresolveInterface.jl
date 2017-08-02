@@ -30,7 +30,7 @@ type PresolveMathProgModel <: AbstractMathProgModel
     innermodel :: AbstractMathProgModel
     realsolver #gives an error if I specify the type. Can't converr from SCSSolver to AbstractMathProgSolver
     function PresolveMathProgModel()
-        realsolver=get_default_solver()
+        realsolver = get_default_solver()
         innermodel = LinearQuadraticModel(realsolver)
         p = Presolve_Problem()
         new(0,0,spzeros(0,0),Int[],Int[],:Min,p,:NotSolved,0.0,Int[],model,realsolver)
@@ -119,6 +119,7 @@ function loadproblem!(model::PresolveMathProgModel, c, A::SparseMatrixCSC, b, co
     end
 
     model.m,model.n = size(A)
+    model.p = Presolve_Problem(false,model.m,model.n)
     model.A = A
     model.b = b
     model.c = c
@@ -160,11 +161,17 @@ function optimize!(m::PresolveMathProgModel)
     m.primal_sol = sol[1]
     # WHAT exactly is the dual sol in the conic problem format.
     # figure that out by reading the cblib or mosek manual. Might need to convert lp dual to conic dual.
+    #TODO
     m.dual_sol = sol[2]
     m.obj_val = dot(m.c, m.primal_sol)
 
-    # you should get the dual solution and then convert it to the type required for Conic Models.
+    # you  should get the dual solution and then convert it to the type required for Conic Models.
 end
+
+#getsolution        for x ,             col primal or var_primalsol
+#getconstrsolution  for y (Ax),         row primal or constr_primalsol
+#getreducedcosts    for gamma-delta,    col dual or var_dualsol
+#getconstrduals     for alpha-beta,     row dual or constr_dualsol
 
 # TODO: getdual and getvardaul, can be done once add the dualsolution support for all the presolve routines.
 function getdual(m::PresolveMathProgModel)
